@@ -86,6 +86,7 @@ This anti-debug technical will block us to debug the next thread. The solution i
 
 The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug. 
 After patching the first function, we get into the thread correctly : 
+
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130536928320700576/image.png)
 
 Now we extract the shellcode to analyse it with miasm.
