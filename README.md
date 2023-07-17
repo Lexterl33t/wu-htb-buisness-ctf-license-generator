@@ -327,13 +327,13 @@ The final step of this shellcode is to xor our first key to the content that we 
 
 So we get this : 
 
-```latex
+```math
 ((P_{i} \oplus x_{i \mod 8}) + K1_{i \mod 36}) \oplus K2_{i \mod 44}
 ```
 
 Reversed : 
 
-```latex
+```math
 ((C_{i} \oplus K2_{i \mod 44}) - K1_{i \mod 36}) \oplus x_{i \mod 8} = P_{i}
 ```
 
