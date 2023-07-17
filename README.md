@@ -327,6 +327,7 @@ The final step of this shellcode is to xor our first key to the content that we 
 
 So we get this : 
 
+<font size="10">
 ```math
 ((P_{i} \oplus x_{i \mod 8}) + K1_{i \mod 36}) \oplus K2_{i \mod 44}
 ```
@@ -336,6 +337,7 @@ Reversed :
 ```math
 ((C_{i} \oplus K2_{i \mod 44}) - K1_{i \mod 36}) \oplus x_{i \mod 8} = P_{i}
 ```
+</font>
 
 P = PlainText / x = the unknow key / C = cipher text
 
