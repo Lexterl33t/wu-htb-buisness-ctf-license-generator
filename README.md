@@ -9,10 +9,7 @@ They give us a pcap and a x86 PE binary wich is a malware. The pcpap is the comm
 ## pcap analysis
 
 This is what it looks like : 
-
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130515622523052042/image.png)
-</center>
 
 Here is a diagram about the communication : 
 
@@ -33,19 +30,13 @@ Finally, the victim send a lot of data which looks like encrypted data exfiltrat
 
 ## Static analysis of PE
 
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130520967085576323/image.png)
-</center>
-
 We see "UPX compressed", so we need to unpack it with UPX -d.
 
 > note: UPX version <= 3.96 has some problems with rva relocation on PE unpacking, so you need to update it with the latest version.
 
 Let's now open it with IDA 
-
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130523427556569138/image.png)
-</center>
 
 This PE is using api hashing, so we will analyse it dynamically to get the functions name.
 
@@ -54,17 +45,11 @@ This PE is using api hashing, so we will analyse it dynamically to get the funct
 The first function execute a Virtual Alloc, and print some strings.
 
 The second one : 
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528206206812301/image.png)
-</center>
-
 As we can see, it will just create a Thread.
 
 The third one is more interesting, it calls 3 functions : 
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528855745101915/image.png)
-</center>
-
 ### NtSetInformationThread
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130529225502359602/image.png)
 By reading the doc, we know that, it will collect some information about a thread. It will set 0x11 to ThreadInformationClass and it corrsepond to this:
@@ -101,10 +86,7 @@ This anti-debug technical will block us to debug the next thread. The solution i
 
 The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug. 
 After patching the first function, we get into the thread correctly : 
-
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130536928320700576/image.png)
-</center>
 
 Now we extract the shellcode to analyse it with miasm.
 
@@ -269,16 +251,12 @@ sb.jitter.add_breakpoint(run_addr+0x4B2, saveshellcode)
 sb.run(run_addr)
 
 ```
-
 Now we get a new shellcode which is the malware.
 
 ## Analysis of the last shellcode
 This shellcode will use data from the precedent shellcode, so it was hard for use to emulate it with miasm again so we decided to analyse it staticly 
 ### First part of the shellcode
-
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130546842539663430/image.png)
-</center>
 
 It walks into the PEB to get the base adress of the actual process (us). That's why we couldn't emulate it with miasm unfortunetly. It walks into the export table to get the function name  and produce a checksum of this name. It compares this result to 0x9f1 to see if it's the good one.
 
@@ -368,22 +346,16 @@ Now for the unknow key, we just have to perform a XOR known plaintext  because o
 We can now extract the exfiltrated data and decrypt it. 
 We need to search for cyclic pattern of 8 bytes of 0x00.
 
-<center>
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130558598397841499/image.png)
-</center>
 Now we have our new key : 0x46609fe251536f
 
 After deciphering it, we see that this a png but not a correct one. Every bytes are in lowercase. In fact this PNG is using GIMP and it puts a lot of 0x20 (spaces) after editing it. So the key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
 
 We finally get the good PNG which give us the flag  ! 
 
-<center>
 ![](https://cdn.discordapp.com/attachments/1085260262883463208/1130115150700093451/lol.png)
-</center>
 It was a good opportunity to deepen our skills on miasm.
 
 If you have any questions on miasm part, don't hesitate to ask us questions.
 
-<center>
 ![](https://images-ext-1.discordapp.net/external/_5e1WwF6oyRCilDiYEO4vPMfw7VjX32SIcdwJFKVuQA/https/media.tenor.com/vvEVqOkSJTEAAAAd/hecker-hecker-beluga.gif)
-</center>
