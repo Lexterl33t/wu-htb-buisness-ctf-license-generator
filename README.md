@@ -24,7 +24,7 @@ Victim ->> Server: 0x690e1d00
 Victim ->> Server: 0x520c176b... (Length: 0x690e1d00)
 ```
 
-First, the victim send "auth" to authenticate with the C2, the c2 respond with a possible key, then the victim send an other key, it looks like the encrypted first key, with his length.
+First, the victim send "auth" to authenticate with the C2, the C2 respond with a possible key, then the victim send an other key, it looks like the encrypted first key, with his length.
 Secondly, the server respond with a lot of bytes (potentially encrypted data).
 Finally, the victim send a lot of data which looks like encrypted data exfiltrated from the malware with his length.
 
@@ -48,9 +48,9 @@ The second one :
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528206206812301/image.png)
 As we can see, it will just create a Thread.
 
-The third one is more interesting, it call 3 functions : 
+The third one is more interesting, it calls 3 functions : 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528855745101915/image.png)
-### NtSetInfromationThread
+### NtSetInformationThread
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130529225502359602/image.png)
 By reading the doc, we know that, it will collect some information about a thread. It will set 0x11 to ThreadInformationClass and it corrsepond to this:
  ```
@@ -67,7 +67,7 @@ ThreadInfoClass = (
                         ThreadQuerySetWin32StartAddress,
                         ThreadZeroTlsCell,
                         ThreadPerformanceCount,
-						   ...
+               ...
                         ThreadIsIoPending,
                         ThreadHideFromDebugger, {<--}
                         ThreadBreakOnTermination,
@@ -80,13 +80,14 @@ ThreadInfoClass = (
   );
 ```
 
-ThreadHideFromDebugger is a flag to delete exceptions SEH of the debugger on thread past in argument. So inour case, the function take in argument the handle of CreateThread and set HideFromDebuger to make the debugger crash on this thread.
+ThreadHideFromDebugger is a flag to delete exceptions SEH of the debugger on thread past in argument. So in our case, the function takes in argument the handle of CreateThread and set HideFromDebuger to make the debugger crash on this thread.
 
 This anti-debug technical will block us to debug the next thread. The solution is to bypass it by patching the function NtSetInformationThread to debug.
 
-The next 2 functions (ResumeThread and WaitForSingleObject) will the start the new thread with antibug. 
+The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug. 
 After patching the first function, we get into the thread correctly : 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130536928320700576/image.png)
+
 Now we extract the shellcode to analyse it with miasm.
 
 # Miasm analysis
@@ -110,55 +111,55 @@ options = parser.parse_args()
 
 # Emulate NtAllocateVirtualMemory, it just need a return of 0
 def NtAllocateVirtualMemory(jitter):
-	jitter.cpu.EAX = 0
+  jitter.cpu.EAX = 0
 
 # Emulate the connection with the C2
 def ws2_32_connect(jitter):
-	jitter.cpu.EAX = 0
+  jitter.cpu.EAX = 0
 
 # Emulate the receive function 
 def ws2_32_recv(jitter):
-	jitter.cpu.EAX = 1
-	print("recv")
+  jitter.cpu.EAX = 1
+  print("recv")
 
 # Emulate the seconde receive wich is the size of the next receive
 def recv1(jitter):
-	jitter.cpu.EAX = 8
-	print("recv1")
-	return True
+  jitter.cpu.EAX = 8
+  print("recv1")
+  return True
 
 # 3rd receive which is the key send by the C2
 def recv2(jitter):
-	jitter.vm.set_mem(jitter.cpu.EDX, b"\x13\x37\xCA\xFE\xBA\xBE\x04\x20")
-	print("recv2")
-	return True
+  jitter.vm.set_mem(jitter.cpu.EDX, b"\x13\x37\xCA\xFE\xBA\xBE\x04\x20")
+  print("recv2")
+  return True
 
 #Receive the length of the next shellcode that the C2 will send
 def recv3(jitter):
-	jitter.cpu.EAX = 538
-	print("recv3")
-	return True
+  jitter.cpu.EAX = 538
+  print("recv3")
+  return True
 
 # Receive the shellcode
 def recvshellcode(jitter):
-	jitter.vm.set_mem(jitter.cpu.EDX, b"\xe7\xac\xbf\x87\xc2\xd1\xb4\x0a\x9e\x40\xbf\x86\xc2\xb5\xd2\x7f\x66\x40\xbf\x0d\x82\xdd\xf8\x0f\x72\xcb\xff\x96\x4b\x94\x83\xc4\x2e\x7c\x34\xca\xca\xa9\x72\x8e\xef\x0d\x53\x0d\x9b\xf1\x72\x8c\xef\x81\x8e\x79\x49\xe5\xc8\x4e\xa8\x71\x6d\xb7\x02\x7d\x72\x8d\x5a\x40\xca\x7f\x43\x2b\x82\x46\x66\x40\xcb\x85\x85\x3a\x96\xc4\x23\xb0\x34\xf3\x2e\x5a\x05\x6b\x67\x86\xb0\x31\xf6\xaf\xf8\x02\x8a\xcb\xf6\x9a\xc3\x10\xf8\x7b\xd7\x41\x79\x0f\x2b\x52\x9a\x6f\x37\xc9\x56\x05\x2b\xf5\x22\xb0\xb0\xf8\x99\xe0\xad\xad\x23\xf7\x6c\x76\x86\xe3\x92\x69\x15\x6e\x47\x6c\xef\x3e\xa4\xdb\x56\x68\x36\xf8\x9f\x8c\xa3\xf6\x23\xf7\x47\x4a\x93\xe3\x92\x69\x5f\x45\x51\x60\xef\x3e\xc8\xb7\x12\x69\x36\xf8\x9e\xbb\xa3\xf0\x23\xf7\x5d\x25\x9e\x8c\x92\x69\x17\x6e\x06\x4a\xef\x3f\xc2\xd1\x73\x4f\xdc\x6c\xbf\x86\xc2\x51\x47\x43\x33\xc3\x7e\x87\xfb\x00\x06\xba\xef\x25\x6f\xec\xee\x58\x16\x83\xa1\x05\x7f\x86\xc2\xd1\x73\x88\x23\xfc\xbf\x86\xc2\xd1\xb4\x0a\xde\x40\xbf\x86\xc2\x5a\x0e\x93\xef\xae\x3c\x68\x86\x5a\x3e\xaf\xdd\x40\xbf\x86\xc2\x58\xab\x7e\xb4\x11\x06\x8e\xc2\xd1\x73\xb8\x97\x19\x36\x56\xc3\x21\xf9\x4f\xef\xba\xbe\x5c\x48\xc3\x43\x9f\xef\xba\xbe\x5c\x4a\xd3\x30\x76\xad\x34\xbd\x6d\x1a\x69\x78\x53\x3d\x4c\xef\x3e\xd8\x89\x6f\x14\x36\xf8\xe6\x9d\xf5\xc9\x23\xf7\x7e\x77\xa3\x86\x92\x69\x44\x4c\x3d\x1b\xef\x3e\xd8\x8a\x77\x5e\x36\xf8\xbb\xb1\xd9\xcc\x23\xf7\x51\x5f\xe6\x82\x92\x69\x6f\x4f\x3f\x5b\xef\x3f\xc2\xd1\x73\x4f\xdc\x64\xbf\x86\xc2\x51\x47\x43\x0e\xc3\x7e\x87\xfb\x00\x06\xba\xef\x25\x3f\xec\xe6\x58\xd6\x33\x99\xbf\x40\x0d\xbf\x0d\xfa\xa1\xe7\xae\x3f\x86\xc2\xd1\xf8\x79\xed\x0d\x5f\x3d\xc2\xd1\x73\x4f\xef\x98\x8e\x54\x93\x68\x57\x4f\x66\x40\x48\x77\x9b\x58\xa3\x4e\x96\xca\xbf\x0f\x38\xd0\xa9\xc5\x74\x40\x6f\x0f\x38\xd0\xa9\xc7\x64\x03\x86\x4d\xb6\xd3\x98\x97\xed\x3d\x63\x0d\xb7\x01\xf8\x02\x86\xfb\xbf\x86\xc2\xd1\xfa\x97\x57\x92\xee\x3f\xee\xd1\x73\x4f\x91\xb1\xe6\x0f\x12\xd0\x83\xc5\x66\xc9\x45\x87\x18\x5b\x61\x7f\xb6\xc9\x45\x87\x18\x59\x71\x0c\x5f\x8b\xcb\x84\x29\x09\x19\x4f\x0c\x44\x36\x6e\x41\x39\x53\x1f\xed\x05\x47\xd6\x49\x84\xcb\xb0\xb4\x2a\xbf\x0d\x87\x31\x23\xc4\x23\x9c\xef\x0d\x87\x29\x23\xc4\x33\xf8\x40\x54\x43\x15\x73\x4e\x66\x40")
-	return True
+  jitter.vm.set_mem(jitter.cpu.EDX, b"\xe7\xac\xbf\x87\xc2\xd1\xb4\x0a\x9e\x40\xbf\x86\xc2\xb5\xd2\x7f\x66\x40\xbf\x0d\x82\xdd\xf8\x0f\x72\xcb\xff\x96\x4b\x94\x83\xc4\x2e\x7c\x34\xca\xca\xa9\x72\x8e\xef\x0d\x53\x0d\x9b\xf1\x72\x8c\xef\x81\x8e\x79\x49\xe5\xc8\x4e\xa8\x71\x6d\xb7\x02\x7d\x72\x8d\x5a\x40\xca\x7f\x43\x2b\x82\x46\x66\x40\xcb\x85\x85\x3a\x96\xc4\x23\xb0\x34\xf3\x2e\x5a\x05\x6b\x67\x86\xb0\x31\xf6\xaf\xf8\x02\x8a\xcb\xf6\x9a\xc3\x10\xf8\x7b\xd7\x41\x79\x0f\x2b\x52\x9a\x6f\x37\xc9\x56\x05\x2b\xf5\x22\xb0\xb0\xf8\x99\xe0\xad\xad\x23\xf7\x6c\x76\x86\xe3\x92\x69\x15\x6e\x47\x6c\xef\x3e\xa4\xdb\x56\x68\x36\xf8\x9f\x8c\xa3\xf6\x23\xf7\x47\x4a\x93\xe3\x92\x69\x5f\x45\x51\x60\xef\x3e\xc8\xb7\x12\x69\x36\xf8\x9e\xbb\xa3\xf0\x23\xf7\x5d\x25\x9e\x8c\x92\x69\x17\x6e\x06\x4a\xef\x3f\xc2\xd1\x73\x4f\xdc\x6c\xbf\x86\xc2\x51\x47\x43\x33\xc3\x7e\x87\xfb\x00\x06\xba\xef\x25\x6f\xec\xee\x58\x16\x83\xa1\x05\x7f\x86\xc2\xd1\x73\x88\x23\xfc\xbf\x86\xc2\xd1\xb4\x0a\xde\x40\xbf\x86\xc2\x5a\x0e\x93\xef\xae\x3c\x68\x86\x5a\x3e\xaf\xdd\x40\xbf\x86\xc2\x58\xab\x7e\xb4\x11\x06\x8e\xc2\xd1\x73\xb8\x97\x19\x36\x56\xc3\x21\xf9\x4f\xef\xba\xbe\x5c\x48\xc3\x43\x9f\xef\xba\xbe\x5c\x4a\xd3\x30\x76\xad\x34\xbd\x6d\x1a\x69\x78\x53\x3d\x4c\xef\x3e\xd8\x89\x6f\x14\x36\xf8\xe6\x9d\xf5\xc9\x23\xf7\x7e\x77\xa3\x86\x92\x69\x44\x4c\x3d\x1b\xef\x3e\xd8\x8a\x77\x5e\x36\xf8\xbb\xb1\xd9\xcc\x23\xf7\x51\x5f\xe6\x82\x92\x69\x6f\x4f\x3f\x5b\xef\x3f\xc2\xd1\x73\x4f\xdc\x64\xbf\x86\xc2\x51\x47\x43\x0e\xc3\x7e\x87\xfb\x00\x06\xba\xef\x25\x3f\xec\xe6\x58\xd6\x33\x99\xbf\x40\x0d\xbf\x0d\xfa\xa1\xe7\xae\x3f\x86\xc2\xd1\xf8\x79\xed\x0d\x5f\x3d\xc2\xd1\x73\x4f\xef\x98\x8e\x54\x93\x68\x57\x4f\x66\x40\x48\x77\x9b\x58\xa3\x4e\x96\xca\xbf\x0f\x38\xd0\xa9\xc5\x74\x40\x6f\x0f\x38\xd0\xa9\xc7\x64\x03\x86\x4d\xb6\xd3\x98\x97\xed\x3d\x63\x0d\xb7\x01\xf8\x02\x86\xfb\xbf\x86\xc2\xd1\xfa\x97\x57\x92\xee\x3f\xee\xd1\x73\x4f\x91\xb1\xe6\x0f\x12\xd0\x83\xc5\x66\xc9\x45\x87\x18\x5b\x61\x7f\xb6\xc9\x45\x87\x18\x59\x71\x0c\x5f\x8b\xcb\x84\x29\x09\x19\x4f\x0c\x44\x36\x6e\x41\x39\x53\x1f\xed\x05\x47\xd6\x49\x84\xcb\xb0\xb4\x2a\xbf\x0d\x87\x31\x23\xc4\x23\x9c\xef\x0d\x87\x29\x23\xc4\x33\xf8\x40\x54\x43\x15\x73\x4e\x66\x40")
+  return True
 
 #Emulate the send function
 def ws2_32_send(jitter):
-	jitter.cpu.EAX = 1
-	print("send")
+  jitter.cpu.EAX = 1
+  print("send")
 
 # File descriptor of socket function
 def ws2_32_socket(jitter):
-	jitter.cpu.EAX = 0x3
+  jitter.cpu.EAX = 0x3
 
 # Add the hostname to emulate correctly the program
 def ws2_32_gethostbyname(jitter):
-	jitter.vm.add_memory_page(0x11111111,PAGE_READ | PAGE_WRITE, b"\x00"*100)
-	jitter.vm.set_mem(0x11111111+0x14, b"\x7f\x00\x00\x01")
-	jitter.cpu.EAX = 0x11111111
-	print(hex(jitter.cpu.EAX))
+  jitter.vm.add_memory_page(0x11111111,PAGE_READ | PAGE_WRITE, b"\x00"*100)
+  jitter.vm.set_mem(0x11111111+0x14, b"\x7f\x00\x00\x01")
+  jitter.cpu.EAX = 0x11111111
+  print(hex(jitter.cpu.EAX))
 
 # implementation of CRC32 because miasm didn't implement it :(
 def hashfunc(function, print_hash=True ):
@@ -167,40 +168,40 @@ def hashfunc(function, print_hash=True ):
   return h
 
 def code_sentinelleCRC32(jitter):
-	if jitter.cpu.ESI > 0:
-		jitter.cpu.EDX = hashfunc(chr(jitter.cpu.EAX)+get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
-		if jitter.cpu.EDX == 0xB128F4E7 or jitter.cpu.EDX == 0xF3596BDF or jitter.cpu.EDX == 0x95B93110 or jitter.cpu.EDX == 0x6C81586F:
-			print(hex(jitter.cpu.EDX),get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
-	return True 
+  if jitter.cpu.ESI > 0:
+    jitter.cpu.EDX = hashfunc(chr(jitter.cpu.EAX)+get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
+    if jitter.cpu.EDX == 0xB128F4E7 or jitter.cpu.EDX == 0xF3596BDF or jitter.cpu.EDX == 0x95B93110 or jitter.cpu.EDX == 0x6C81586F:
+      print(hex(jitter.cpu.EDX),get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
+  return True 
 
 
 def code_sentinelle1(jitter):
-	jitter.cpu.EAX = 0x11111111
-	return True
+  jitter.cpu.EAX = 0x11111111
+  return True
 
 # extracting the deciphered shellcode
 def saveshellcode(jitter):
-	f = open("shellcodeFinal.bin", "wb")
-	f.write(jitter.vm.get_mem(jitter.cpu.ECX, 65535))
-	f.close()
-	print("Extraction done.")
-	return True
+  f = open("shellcodeFinal.bin", "wb")
+  f.write(jitter.vm.get_mem(jitter.cpu.ECX, 65535))
+  f.close()
+  print("Extraction done.")
+  return True
 
 # Code sentinelle allow us to put breakpoints to debug the shellcode as we want, print some registers etc
 def code_sentinelle(jitter):
-	#print(jitter.cpu.ECX)
-	#print(hex(jitter.cpu.ESI))
-	#print(chr(jitter.cpu.EAX))
-	#print(jitter.libs.fad2cname[jitter.cpu.EDX])
-	#print(hex(jitter.cpu.EAX))
-	print(jitter.vm.get_mem(jitter.cpu.ECX, 65535))
+  #print(jitter.cpu.ECX)
+  #print(hex(jitter.cpu.ESI))
+  #print(chr(jitter.cpu.EAX))
+  #print(jitter.libs.fad2cname[jitter.cpu.EDX])
+  #print(hex(jitter.cpu.EAX))
+  print(jitter.vm.get_mem(jitter.cpu.ECX, 65535))
 
-	#print(get_win_str_a(jitter, jitter.cpu.ESP + jitter.cpu.ECX, 0x1), end='')
-	#print(get_win_str_a(jitter, jitter.cpu.ESI, 0x40), end='')
-	#ree-windows-license.uwu
-	#hellgen
-	#print(get_win_str_a(jitter, 0x40000e8, 40))
-	return False
+  #print(get_win_str_a(jitter, jitter.cpu.ESP + jitter.cpu.ECX, 0x1), end='')
+  #print(get_win_str_a(jitter, jitter.cpu.ESI, 0x40), end='')
+  #ree-windows-license.uwu
+  #hellgen
+  #print(get_win_str_a(jitter, 0x40000e8, 40))
+  return False
 
 
 # Create sandbox and emulate PE headers
@@ -257,8 +258,9 @@ This shellcode will use data from the precedent shellcode, so it was hard for us
 ### First part of the shellcode
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130546842539663430/image.png)
 
-It walk into the PEB to get the base adress of the actual process (us). That why we couldn't emulate it with miasm unfortunetly. It walk into the export table to get the function name  and produce a checksum of this name. It compare this result to 0x9f1 to see if it's the good one.
-For us, to emulate this, we get all the suspicious function name from the main thread and check if reproduce the checksum and check if it's equal to 0x9f1.
+It walks into the PEB to get the base adress of the actual process (us). That's why we couldn't emulate it with miasm unfortunetly. It walks into the export table to get the function name  and produce a checksum of this name. It compares this result to 0x9f1 to see if it's the good one.
+
+For us, to emulate this, we get all the suspicious function name from the main thread, reproduce the checksum and check if it's equal to 0x9f1.
 
 With that, we get this function : 
 ```c
@@ -324,24 +326,28 @@ The second key will be add to the content of the file that we get before.
 The final step of this shellcode is to xor our first key to the content that we modified before.
 
 So we get this : 
-$$
+
+```latex
 ((P_{i} \oplus x_{i \mod 8}) + K1_{i \mod 36}) \oplus K2_{i \mod 44}
-$$
+```
 
 Reversed : 
-$$
+
+```latex
 ((C_{i} \oplus K2_{i \mod 44}) - K1_{i \mod 36}) \oplus x_{i \mod 8} = P_{i}
-$$
+```
+
 P = PlainText / x = the unknow key / C = cipher text
 
-Now for the unknow key, we just have to perfor a XOR known plaintext  because of the small length of this key.
+Now for the unknow key, we just have to perform a XOR known plaintext  because of the short length of this key.
 
 We can now extract the exfiltrated data and decrypt it. 
 We need to search for cyclic pattern of 8 bytes of 0x00.
-![](https://cdn.discordapp.com/attachments/993795267511996466/1130558598397841499/image.png)
-Now we have our knew key : 0x46609fe251536f
 
-After deciphering it, we see that this a a png but not a correct one. Every bytes are in lowercase. In fact this PNG is using GIMP and GIMP puts a lot of 0x20 (spaces) after editing it. So they key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
+![](https://cdn.discordapp.com/attachments/993795267511996466/1130558598397841499/image.png)
+Now we have our new key : 0x46609fe251536f
+
+After deciphering it, we see that this a png but not a correct one. Every bytes are in lowercase. In fact this PNG is using GIMP and it puts a lot of 0x20 (spaces) after editing it. So the key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
 
 We finally get the good PNG which give us the flag  ! 
 
