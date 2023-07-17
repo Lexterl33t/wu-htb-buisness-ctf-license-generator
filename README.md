@@ -8,10 +8,10 @@ The challenge provides us a PCAP and a x86 PE binary being a malware. The PCAP i
 
 ## PCAP analysis
 
-This is what it looks like : 
+This is what it looks like :
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130515622523052042/image.png)
 
-Here is a diagram of the communication : 
+Here is a diagram of the communication :
 
 ```mermaid
 sequenceDiagram
@@ -35,7 +35,7 @@ We see "UPX compressed", so we need to unpack it with UPX -d.
 
 > note: UPX version <= 3.96 has some problems with rva relocation on PE unpacking, so you need to update it with the latest version.
 
-Let's now open it with IDA 
+Let's now open it with IDA
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130523427556569138/image.png)
 
 This PE is using api hashing, so we will analyse it dynamically to get the functions name.
@@ -44,11 +44,11 @@ This PE is using api hashing, so we will analyse it dynamically to get the funct
 
 The first function executes a Virtual Alloc, and print some strings.
 
-The second one : 
+The second one :
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528206206812301/image.png)
 As we can see, it will just create a Thread.
 
-The third one is more interesting, it calls 3 functions : 
+The third one is more interesting, it calls 3 functions :
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528855745101915/image.png)
 ### NtSetInformationThread
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130529225502359602/image.png)
@@ -84,18 +84,18 @@ ThreadHideFromDebugger is a flag to delete SEH (Structured Exception Handler) of
 
 This anti-debug will prevent us from debugging the next thread. The solution is to bypass it by patching the function NtSetInformationThread int order to resume debugging.
 
-The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug. 
-After patching the first function, we get into the thread correctly : 
+The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug.
+After patching the first function, we get into the thread correctly :
 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130536928320700576/image.png)
 
 Now we extract the shellcode to analyse it further with miasm.
 
 # Miasm analysis
-After analysing the shellcode with miasm we know : 
+After analysing the shellcode with miasm we know :
 The shellcode will receive a key from the C2, encrypt it and send it back to the C2. This key will allow us to decipher the new shellcode sent by the C2. We just have to emulate the execution of this malare in miasm, and set all the values that we received from the C2 accordingly.
 
-Our script being quite big, we will comment all important lines : 
+Our script being quite big, we will comment all important lines :
 ```py
 from pdb import pm
 from miasm.jitter.csts import PAGE_READ, PAGE_WRITE
@@ -118,7 +118,7 @@ def NtAllocateVirtualMemory(jitter):
 def ws2_32_connect(jitter):
   jitter.cpu.EAX = 0
 
-# Emulate the receive function 
+# Emulate the receive function
 def ws2_32_recv(jitter):
   jitter.cpu.EAX = 1
   print("recv")
@@ -173,7 +173,7 @@ def code_sentinelleCRC32(jitter):
     jitter.cpu.EDX = hashfunc(chr(jitter.cpu.EAX)+get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
     if jitter.cpu.EDX == 0xB128F4E7 or jitter.cpu.EDX == 0xF3596BDF or jitter.cpu.EDX == 0x95B93110 or jitter.cpu.EDX == 0x6C81586F:
       print(hex(jitter.cpu.EDX),get_win_str_a(jitter, jitter.cpu.ESI, 0x40))
-  return True 
+  return True
 
 
 def code_sentinelle1(jitter):
@@ -221,7 +221,7 @@ sb.jitter.user_globals['ws2_32_gethostbyname'] = ws2_32_gethostbyname
 sb.jitter.user_globals['ws2_32_connect'] = ws2_32_connect
 sb.jitter.user_globals['ws2_32_send'] = ws2_32_send
 sb.jitter.user_globals['ws2_32_recv'] = ws2_32_recv
-# Map the shellcode in memory 
+# Map the shellcode in memory
 sb.jitter.vm.add_memory_page(run_addr, PAGE_READ | PAGE_WRITE, data)
 # Add the stack to the memory
 sb.jitter.vm.add_memory_page(sb.jitter.cpu.EBP+0xffffff00, PAGE_READ | PAGE_WRITE, b"\x00"*0x1000)
@@ -255,7 +255,7 @@ sb.run(run_addr)
 Now we get a new shellcode which is the malware.
 
 ## Analysis of the last shellcode
-This shellcode will use data from the last shellcode, so it was hard for use to emulate it with miasm again, we decided to switch to static analysis. 
+This shellcode will use data from the last shellcode, so it was hard for use to emulate it with miasm again, we decided to switch to static analysis.
 ### First part of the shellcode
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130546842539663430/image.png)
 
@@ -263,7 +263,7 @@ It walks into the PEB to get the base adress of the actual process (us). That's 
 
 We fetch all the suspicious function names from the thread, we compute the checksum and compare with the wanted hash.
 
-With that in mind, we get this function : 
+With that in mind, we get this function :
 ```c
 BOOL __cdecl ReadFileContentsGenerator(_DWORD *a1, DWORD *a2)
 {
@@ -319,21 +319,21 @@ BOOL __cdecl ReadFileContentsGenerator(_DWORD *a1, DWORD *a2)
 ```
 This function is simple, it takes a pointer for the 1st argument and the pointer size for the second argument. It set the content of the 3rd file in admin folder to the first argument pointer.
 
-We then go back in our shellcode, it loads a first key, xor it with 0x55 and save it. 
+We then go back in our shellcode, it loads a first key, xor it with 0x55 and save it.
 Next, there is a tricky thing in our case because it will search for data in the first shellcode.
 We skip this step for now.
-Then, a second key is loaded, and its is xored with 0x68. 
+Then, a second key is loaded, and its is xored with 0x68.
 The second key will be added to the content of the file that we got before.
 The final step of this shellcode is to xor our first key with the content that we modified before.
 
-So we get this : 
+So we get this :
 
 
 ```math
 ((P_{i} \oplus x_{i \mod 8}) + K1_{i \mod 36}) \oplus K2_{i \mod 44}
 ```
 
-Reversed : 
+Reversed :
 
 ```math
 ((C_{i} \oplus K2_{i \mod 44}) - K1_{i \mod 36}) \oplus x_{i \mod 8} = P_{i}
@@ -344,7 +344,7 @@ P = PlainText / x = the unknow key / C = cipher text
 
 Now for the unknow key, we just have to perform a XOR known plaintext given the short length of this key.
 
-We can now extract the exfiltrated data and decrypt it. 
+We can now extract the exfiltrated data and decrypt it.
 We need to search for cyclic pattern of 8 bytes of 0x00.
 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130558598397841499/image.png)
@@ -352,7 +352,52 @@ Now we have our new key : 0x46609fe251536f
 
 After deciphering it, we see that this a png but it is corrupted. Every bytes are in lowercase. In fact this PNG is using GIMP and it puts a lot of 0x20 (spaces) after editing it. So the key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
 
-We finally get the good PNG which give us the flag  ! 
+```py
+from ctypes import c_uint8
+
+
+
+xor_key = list(b"d!`\n;e!\n!=a!\nfa&,\n7 !\n,e \na\'f\n%\'f!!,\n69e&fo|")
+
+
+for i in range(len(xor_key)):
+    xor_key[i] = xor_key[i] ^ 0x55
+
+
+a = open("aaa", "rb").read()
+
+
+b = []
+
+for i in range(len(a)):
+    b.append((a[i] ^ xor_key[i % len(xor_key)]))
+
+
+sub_key = list(b"\x1c\x00Y\x1b7\x1fY\x04\x047\x1b\x1d\x1a[\x04\x117\x03[[\x187\x1c\x00Y\x1b7\x18\x1aX\x1c[\x0b\x1c[\x0c")
+
+for i in range(len(sub_key)):
+    sub_key[i] = sub_key[i] ^ 0x68
+
+
+for i in range(len(b)):
+
+    b[i] = c_uint8(b[i] - sub_key[i % len(sub_key)]).value
+
+
+second_xor_key = list(b"\x66\x40\xbf\x86\xc2\xd1\x73\x4f")
+
+
+for i in range(len(b)):
+    b[i] = b[i] ^ (second_xor_key[i % 8]);
+
+
+
+f = open("lol.png", "wb")
+f.write(bytes(b))
+f.close()
+
+```
+We finally get the good PNG which give us the flag  !
 
 ![](https://cdn.discordapp.com/attachments/1085260262883463208/1130115150700093451/lol.png)
 It was a good opportunity to sharpen our skills on miasm.
