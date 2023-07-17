@@ -358,4 +358,4 @@ It was a good opportunity to deepen our skills on miasm.
 
 If you have any questions on miasm part, don't hesitate to ask us questions.
 
-![](https://images-ext-1.discordapp.net/external/_5e1WwF6oyRCilDiYEO4vPMfw7VjX32SIcdwJFKVuQA/https/media.tenor.com/vvEVqOkSJTEAAAAd/hecker-hecker-beluga.gif)
+![](https://cdn.discordapp.com/attachments/993795267511996466/1130568342118355025/hecker-hecker-beluga.gif)
