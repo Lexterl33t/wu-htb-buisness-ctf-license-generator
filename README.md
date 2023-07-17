@@ -2,16 +2,16 @@
 
 > by Lxt3h and mhoste
 
-This was the harddest reverse engineering challenge from HTB business CTF. This chall helped us to improve our skills on the Win API and miasm.
+This was the hardest reverse engineering challenge from HTB Buisness CTF. This chall helped us to improve our skills in WinAPI and Miasm.
 
-They give us a pcap and a x86 PE binary wich is a malware. The pcpap is the communication between the victim and the C2.
+The challenge provides us a PCAP and a x86 PE binary being a malware. The PCAP is the a record of the communication between the victim and the C2.
 
-## pcap analysis
+## PCAP analysis
 
 This is what it looks like : 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130515622523052042/image.png)
 
-Here is a diagram about the communication : 
+Here is a diagram of the communication : 
 
 ```mermaid
 sequenceDiagram
@@ -24,9 +24,9 @@ Victim ->> Server: 0x690e1d00
 Victim ->> Server: 0x520c176b... (Length: 0x690e1d00)
 ```
 
-First, the victim send "auth" to authenticate with the C2, the C2 respond with a possible key, then the victim send an other key, it looks like the encrypted first key, with his length.
-Secondly, the server respond with a lot of bytes (potentially encrypted data).
-Finally, the victim send a lot of data which looks like encrypted data exfiltrated from the malware with his length.
+First, the victim send "auth" to authenticate with the C2, the C2 respond with a possible key, then the victim sends an other key similar to the first encrypted first key, with his length.
+In a second time, the server respond with a lot of bytes (potentially encrypted data).
+Finally, the victim sends a lot of data that looks like encrypted data exfiltrated from the malware with his length.
 
 ## Static analysis of PE
 
@@ -42,7 +42,7 @@ This PE is using api hashing, so we will analyse it dynamically to get the funct
 
 ## Dynamic analysis
 
-The first function execute a Virtual Alloc, and print some strings.
+The first function executes a Virtual Alloc, and print some strings.
 
 The second one : 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528206206812301/image.png)
@@ -52,7 +52,7 @@ The third one is more interesting, it calls 3 functions :
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130528855745101915/image.png)
 ### NtSetInformationThread
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130529225502359602/image.png)
-By reading the doc, we know that, it will collect some information about a thread. It will set 0x11 to ThreadInformationClass and it corrsepond to this:
+By reading the doc we know that it will collect some informations about a thread. It will set 0x11 to ThreadInformationClass and it correspond to this:
  ```
 ThreadInfoClass = (
                         ThreadBasicInformation,
@@ -80,22 +80,22 @@ ThreadInfoClass = (
   );
 ```
 
-ThreadHideFromDebugger is a flag to delete exceptions SEH of the debugger on thread past in argument. So in our case, the function takes in argument the handle of CreateThread and set HideFromDebuger to make the debugger crash on this thread.
+ThreadHideFromDebugger is a flag to delete SEH (Structured Exception Handler) of the debugger on a thread given in argument. So in our case, the function takes in argument the handle of CreateThread and set HideFromDebuger to make the debugger crash on this thread.
 
-This anti-debug technical will block us to debug the next thread. The solution is to bypass it by patching the function NtSetInformationThread to debug.
+This anti-debug will prevent us from debugging the next thread. The solution is to bypass it by patching the function NtSetInformationThread int order to resume debugging.
 
 The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug. 
 After patching the first function, we get into the thread correctly : 
 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130536928320700576/image.png)
 
-Now we extract the shellcode to analyse it with miasm.
+Now we extract the shellcode to analyse it further with miasm.
 
 # Miasm analysis
 After analysing the shellcode with miasm we know : 
-The shellcode will receive a key from the C2, encrypt it and after that, send it to the C2. This key will allow us to decipher the new shellcode send by the C2. We juste have to emulate the execution of this malare in miasm, and set all the values that we received from the C2
+The shellcode will receive a key from the C2, encrypt it and send it back to the C2. This key will allow us to decipher the new shellcode sent by the C2. We just have to emulate the execution of this malare in miasm, and set all the values that we received from the C2 accordingly.
 
-Because of the size of our script, we will comment all important lines : 
+Our script being quite big, we will comment all important lines : 
 ```py
 from pdb import pm
 from miasm.jitter.csts import PAGE_READ, PAGE_WRITE
@@ -237,7 +237,7 @@ sb.jitter.vm.add_memory_page(0x7ffdf002, PAGE_READ | PAGE_WRITE, b"\x90"*4)
 sb.jitter.vm.set_mem(run_addr+0x3b5,b"\x90"*7)
 # call the reimplementation of CRC32
 sb.jitter.add_breakpoint(run_addr+0x3bc, code_sentinelleCRC32)
-# We put breakpoints on recv functions to emulate them and set to memory the value that we get in the pcap like the key
+# We put breakpoints on recv functions to emulate them and set to memory the value that we get in the PCAP like the key
 sb.jitter.add_breakpoint(run_addr+0x238, recv1)
 sb.jitter.add_breakpoint(run_addr+0x239, recv2)
 sb.jitter.add_breakpoint(run_addr+0x302, recv3)
@@ -255,15 +255,15 @@ sb.run(run_addr)
 Now we get a new shellcode which is the malware.
 
 ## Analysis of the last shellcode
-This shellcode will use data from the precedent shellcode, so it was hard for use to emulate it with miasm again so we decided to analyse it staticly 
+This shellcode will use data from the last shellcode, so it was hard for use to emulate it with miasm again, we decided to switch to static analysis. 
 ### First part of the shellcode
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130546842539663430/image.png)
 
-It walks into the PEB to get the base adress of the actual process (us). That's why we couldn't emulate it with miasm unfortunetly. It walks into the export table to get the function name  and produce a checksum of this name. It compares this result to 0x9f1 to see if it's the good one.
+It walks into the PEB to get the base adress of the actual process (us). That's why we couldn't emulate it with miasm unfortunately. It walks into the export table to get the function name and produce a checksum of this name. It compares this result to 0x9f1 to see if it's the correct one.
 
-For us, to emulate this, we get all the suspicious function name from the main thread, reproduce the checksum and check if it's equal to 0x9f1.
+We fetch all the suspicious function names from the thread, we compute the checksum and compare with the wanted hash.
 
-With that, we get this function : 
+With that in mind, we get this function : 
 ```c
 BOOL __cdecl ReadFileContentsGenerator(_DWORD *a1, DWORD *a2)
 {
@@ -322,9 +322,9 @@ This function is simple, it takes a pointer for the 1st argument and the pointer
 We then go back in our shellcode, it loads a first key, xor it with 0x55 and save it. 
 Next, there is a tricky thing in our case because it will search for data in the first shellcode.
 We skip this step for now.
-Then, a second key is loaded, and xor it with 0x68. 
-The second key will be add to the content of the file that we get before.
-The final step of this shellcode is to xor our first key to the content that we modified before.
+Then, a second key is loaded, and its is xored with 0x68. 
+The second key will be added to the content of the file that we got before.
+The final step of this shellcode is to xor our first key with the content that we modified before.
 
 So we get this : 
 
@@ -342,7 +342,7 @@ Reversed :
 
 P = PlainText / x = the unknow key / C = cipher text
 
-Now for the unknow key, we just have to perform a XOR known plaintext  because of the short length of this key.
+Now for the unknow key, we just have to perform a XOR known plaintext given the short length of this key.
 
 We can now extract the exfiltrated data and decrypt it. 
 We need to search for cyclic pattern of 8 bytes of 0x00.
@@ -350,13 +350,13 @@ We need to search for cyclic pattern of 8 bytes of 0x00.
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130558598397841499/image.png)
 Now we have our new key : 0x46609fe251536f
 
-After deciphering it, we see that this a png but not a correct one. Every bytes are in lowercase. In fact this PNG is using GIMP and it puts a lot of 0x20 (spaces) after editing it. So the key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
+After deciphering it, we see that this a png but it is corrupted. Every bytes are in lowercase. In fact this PNG is using GIMP and it puts a lot of 0x20 (spaces) after editing it. So the key must be xored by 0x20 because we didn't perform a xor known plaintext on 0x20 but on 0x00.
 
 We finally get the good PNG which give us the flag  ! 
 
 ![](https://cdn.discordapp.com/attachments/1085260262883463208/1130115150700093451/lol.png)
-It was a good opportunity to deepen our skills on miasm.
+It was a good opportunity to sharpen our skills on miasm.
 
-If you have any questions on miasm part, don't hesitate to ask us questions.
+If you have any questions on the miasm part, feel free ask us questions.
 
 ![](https://cdn.discordapp.com/attachments/993795267511996466/1130568342118355025/hecker-hecker-beluga.gif)
