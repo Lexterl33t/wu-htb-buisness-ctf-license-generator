@@ -82,7 +82,7 @@ ThreadInfoClass = (
 
 ThreadHideFromDebugger is a flag to delete SEH (Structured Exception Handler) of the debugger on a thread given in argument. So in our case, the function takes in argument the handle of CreateThread and set HideFromDebuger to make the debugger crash on this thread.
 
-This anti-debug will prevent us from debugging the next thread. The solution is to bypass it by patching the function NtSetInformationThread int order to resume debugging.
+This anti-debug will prevent us from debugging the next thread. The solution is to bypass it by patching the function NtSetInformationThread in order to resume debugging.
 
 The next 2 functions (ResumeThread and WaitForSingleObject) will start the new thread with anti debug.
 After patching the first function, we get into the thread correctly :
